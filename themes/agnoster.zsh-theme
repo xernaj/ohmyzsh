@@ -79,7 +79,7 @@ prompt_end() {
   else
     echo -n "%{%k%}"
   fi
-  echo -n "%{%f%}"
+  echo -n "\nλ%{%f%}"
   CURRENT_BG=''
 }
 
@@ -104,12 +104,17 @@ prompt_git() {
     local LC_ALL="" LC_CTYPE="en_US.UTF-8"
     PL_BRANCH_CHAR=$'\ue0a0'         # 
   }
-  local ref dirty mode repo_path
+  local ref dirty mode repo_path git_username git_useremail
 
    if [[ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ]]; then
+    git_username="$(git config user.name)"
+    git_useremail="$(git config user.email)"
     repo_path=$(git rev-parse --git-dir 2>/dev/null)
     dirty=$(parse_git_dirty)
     ref=$(git symbolic-ref HEAD 2> /dev/null) || ref="➦ $(git rev-parse --short HEAD 2> /dev/null)"
+
+    prompt_segment 99d $CURRENT_FG "${git_username} (${git_useremail})"
+
     if [[ -n $dirty ]]; then
       prompt_segment yellow black
     else
@@ -204,7 +209,7 @@ prompt_hg() {
 
 # Dir: current working directory
 prompt_dir() {
-  prompt_segment blue $CURRENT_FG '%~'
+  prompt_segment 39d $CURRENT_FG '%~'
 }
 
 # Virtualenv: current working virtualenv
