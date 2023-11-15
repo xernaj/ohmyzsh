@@ -73,7 +73,7 @@ prompt_segment() {
 }
 
 # End the prompt, closing any open segments
-prompt_end() {
+ prompt_end() {
   if [[ -n $CURRENT_BG ]]; then
     echo -n " %{%k%F{$CURRENT_BG}%}$SEGMENT_SEPARATOR"
   else
@@ -116,6 +116,17 @@ prompt_git() {
     prompt_segment 99d $CURRENT_FG "${git_username} (${git_useremail})"
 
     if [[ -n $dirty ]]; then
+      #prompt_segment yellow black
+      prompt_segment $CURRENT_BG yellow
+    else
+      #prompt_segment green $CURRENT_FG
+      prompt_segment
+      #prompt_segment $CURRENT_BG green
+    fi
+
+    echo -n "\e[m\n" # clear colours and add newline
+
+    if [[ -n $dirty ]]; then
       prompt_segment yellow black
     else
       prompt_segment green $CURRENT_FG
@@ -144,31 +155,70 @@ prompt_git() {
   fi
 }
 
-prompt_bzr() {
-  (( $+commands[bzr] )) || return
-
-  # Test if bzr repository in directory hierarchy
-  local dir="$PWD"
-  while [[ ! -d "$dir/.bzr" ]]; do
-    [[ "$dir" = "/" ]] && return
-    dir="${dir:h}"
-  done
-
-  local bzr_status status_mod status_all revision
-  if bzr_status=$(bzr status 2>&1); then
-    status_mod=$(echo -n "$bzr_status" | head -n1 | grep "modified" | wc -m)
-    status_all=$(echo -n "$bzr_status" | head -n1 | wc -m)
-    revision=$(bzr log -r-1 --log-format line | cut -d: -f1)
-    if [[ $status_mod -gt 0 ]] ; then
-      prompt_segment yellow black "bzr@$revision ✚"
-    else
-      if [[ $status_all -gt 0 ]] ; then
-        prompt_segment yellow black "bzr@$revision"
-      else
-        prompt_segment green black "bzr@$revision"
-      fi
-    fi
+old_prompt_git() {
+  (( $+commands[git] )) || return
+  if [[ "$(git config --get oh-my-zsh.hide-status 2>/dev/null)" = 1 ]]; then
+    return
   fi
+  local PL_BRANCH_CHAR
+  () {
+    local LC_ALL="" LC_CTYPE="en_US.UTF-8"
+    PL_BRANCH_CHAR=$'\ue0a0'         # 
+  }
+  local ref dirty mode repo_path
+
+  if $(git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
+    repo_path=$(git rev-parse --git-dir 2>/dev/null)
+    dirty=$(parse_git_dirty)
+    ref=$(git symbolic-ref HEAD 2> /dev/null) || ref="➦ $(git rev-parse --short HEAD 2> /dev/null)"
+    if [[ -n $dirty ]]; then
+      prompt_segment yellow black
+    else
+      prompt_segment green $CURRENT_FG
+    fi
+
+    if [[ -e "${repo_path}/BISECT_LOG" ]]; then
+      mode=" <B>"
+    elif [[ -e "${repo_path}/MERGE_HEAD" ]]; then
+      mode=" >M<"
+    elif [[ -e "${repo_path}/rebase" || -e "${repo_path}/rebase-apply" || -e "${repo_path}/rebase-merge" || -e "${repo_path}/../.dotest" ]]; then
+      mode=" >R>"
+    fi
+
+    setopt promptsubst
+    autoload -Uz vcs_info
+
+    zstyle ':vcs_info:*' enable git
+    zstyle ':vcs_info:*' get-revision true
+    zstyle ':vcs_info:*' check-for-changes true
+    zstyle ':vcs_info:*' stagedstr '✚'
+    zstyle ':vcs_info:*' unstagedstr '●'
+    zstyle ':vcs_info:*' formats ' %u%c'
+    zstyle ':vcs_info:*' actionformats ' %u%c'
+    vcs_info
+    echo -n "${ref/refs\/heads\//$PL_BRANCH_CHAR }${vcs_info_msg_0_%% }${mode}"
+  fi
+}
+
+prompt_bzr() {
+    (( $+commands[bzr] )) || return
+    if (bzr status >/dev/null 2>&1); then
+        status_mod=`bzr status | head -n1 | grep "modified" | wc -m`
+        status_all=`bzr status | head -n1 | wc -m`
+        revision=`bzr log | head -n2 | tail -n1 | sed 's/^revno: //'`
+        if [[ $status_mod -gt 0 ]] ; then
+            prompt_segment yellow black
+            echo -n "bzr@"$revision "✚ "
+        else
+            if [[ $status_all -gt 0 ]] ; then
+                prompt_segment yellow black
+                echo -n "bzr@"$revision
+            else
+                prompt_segment green black
+                echo -n "bzr@"$revision
+            fi
+        fi
+    fi
 }
 
 prompt_hg() {
@@ -209,6 +259,7 @@ prompt_hg() {
 
 # Dir: current working directory
 prompt_dir() {
+  #prompt_segment blue $CURRENT_FG '%~'
   prompt_segment 39d $CURRENT_FG '%~'
 }
 
@@ -240,7 +291,7 @@ prompt_status() {
 #   ends in '-prod'
 # - displays black on green otherwise
 prompt_aws() {
-  [[ -z "$AWS_PROFILE" || "$SHOW_AWS_PROMPT" = false ]] && return
+  [[ -z "$AWS_PROFILE" ]] && return
   case "$AWS_PROFILE" in
     *-prod|*production*) prompt_segment red yellow  "AWS: $AWS_PROFILE" ;;
     *) prompt_segment green black "AWS: $AWS_PROFILE" ;;
